@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temple PDF to ZIP</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1f1d1a; --muted: #6b665d; --line: #e3ded3;
+    --accent: #b4531c; --accent-ink: #ffffff; --accent-soft: #f6e6da; --ok: #2f7a45; --err: #b42318;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161513; --panel: #201f1c; --ink: #ece8e0; --muted: #a19b90; --line: #36332e;
+            --accent: #e07a3c; --accent-ink: #1a1410; --accent-soft: #3a2a1f; --ok: #6cc28a; --err: #f0857a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .drop { border: 2px dashed var(--line); border-radius: var(--radius); background: var(--panel);
+          padding: 40px 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { display: block; font-size: 17px; margin-bottom: 4px; }
+  .drop span { color: var(--muted); }
+  input[type=file] { display: none; }
+  .status { margin: 16px 0; min-height: 22px; color: var(--muted); }
+  .status.err { color: var(--err); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line);
+             border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+             vertical-align: -2px; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+         background: var(--bg); padding: 12px 0; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .bar .summary { flex: 1 1 220px; color: var(--muted); }
+  .bar .summary b { color: var(--ink); }
+  .zipname { display: flex; align-items: center; gap: 6px; }
+  .zipname input { width: 180px; }
+  button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
+           color: var(--ink); padding: 8px 14px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button:disabled { opacity: .6; cursor: default; }
+  button.link { border: none; background: none; color: var(--accent); padding: 4px 6px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; }
+  .card.off { opacity: .55; }
+  .card > summary { list-style: none; display: flex; gap: 12px; align-items: center; padding: 12px 16px; cursor: pointer; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary .chev { transition: transform .15s; color: var(--muted); }
+  .card[open] > summary .chev { transform: rotate(90deg); }
+  .card > summary .name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+  .card > summary .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .body { padding: 4px 16px 16px; border-top: 1px solid var(--line); }
+  .grid { display: grid; grid-template-columns: 110px 1fr; gap: 10px 14px; align-items: start; margin-top: 12px; }
+  label.f { color: var(--muted); font-size: 13px; padding-top: 8px; }
+  input[type=text], textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+           border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  textarea { resize: vertical; line-height: 1.45; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .thumb { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid transparent;
+           background: var(--bg); aspect-ratio: 4/3; cursor: pointer; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .n { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.65); color: #fff;
+              font-size: 12px; padding: 1px 7px; border-radius: 10px; }
+  .thumb.off { border-color: var(--err); }
+  .thumb.off img { opacity: .25; }
+  .thumb.off::after { content: "excluded"; position: absolute; inset: auto 0 6px 0; text-align: center;
+                      font-size: 12px; color: var(--err); font-weight: 600; }
+  .row-actions { display: flex; gap: 8px; margin: 0 0 12px; }
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; gap: 4px; }
+    label.f { padding-top: 10px; }
+    .zipname input { width: 140px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Temple PDF to ZIP</h1>
+  <p class="sub">Upload a temple-series PDF. Each temple gets its own folder with a Word document of the text and every photo, packed into one ZIP.</p>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="application/pdf,.pdf">
+    <strong>Drop the PDF here or click to choose</strong>
+    <span>Example: 266-275.pdf → 266-275.zip</span>
+  </label>
+  <div class="status" id="status"></div>
+
+  <section id="result" hidden>
+    <div class="bar">
+      <div class="summary" id="summary"></div>
+      <div class="zipname"><input type="text" id="zipName" aria-label="ZIP file name"></div>
+      <button class="primary" id="download">Download ZIP</button>
+    </div>
+    <div class="row-actions">
+      <button class="link" id="expandAll">Expand all</button>
+      <button class="link" id="collapseAll">Collapse all</button>
+    </div>
+    <div id="cards"></div>
+  </section>
+</main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const state = { job: null, articles: [] };
+
+const drop = $('#drop'), fileInput = $('#file'), statusEl = $('#status');
+
+function setStatus(msg, kind) {
+  statusEl.className = 'status' + (kind === 'err' ? ' err' : '');
+  statusEl.innerHTML = kind === 'busy' ? '<span class="spinner"></span>' + msg : msg;
+}
+
+['dragenter', 'dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) upload(f); });
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) upload(fileInput.files[0]); fileInput.value = ''; });
+
+async function upload(file) {
+  $('#result').hidden = true;
+  setStatus(`Reading ${file.name}…`, 'busy');
+  const fd = new FormData(); fd.append('pdf', file);
+  try {
+    const res = await fetch('/api/extract', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    state.job = data.job;
+    state.articles = data.articles.map(a => ({ ...a, include: true, keep: a.images.map(() => true) }));
+    $('#zipName').value = data.zip_name;
+    render();
+    setStatus(`Read ${file.name}. Check the folders below, edit anything you need, then download.`);
+  } catch (e) {
+    setStatus(e.message, 'err');
+  }
+}
+
+function folderName(a) {
+  const n = String(a.number || '').trim(), t = (a.title || '').trim();
+  return (n ? `${n}-${t}` : t).replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim() || 'untitled';
+}
+
+function updateSummary() {
+  const inc = state.articles.filter(a => a.include);
+  const photos = inc.reduce((s, a) => s + a.keep.filter(Boolean).length, 0);
+  $('#summary').innerHTML = `<b>${inc.length}</b> of ${state.articles.length} folders · <b>${photos}</b> photos`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function render() {
+  const wrap = $('#cards'); wrap.innerHTML = '';
+  state.articles.forEach((a, i) => {
+    const card = document.createElement('details');
+    card.className = 'card';
+    card.innerHTML = `
+      <summary>
+        <input type="checkbox" class="inc" ${a.include ? 'checked' : ''} aria-label="Include this folder">
+        <span class="chev">▶</span>
+        <span class="name"></span>
+        <span class="meta"></span>
+      </summary>
+      <div class="body">
+        <div class="grid">
+          <label class="f">Number</label><input type="text" data-k="number" value="${esc(a.number)}">
+          <label class="f">Title</label><input type="text" data-k="title" value="${esc(a.title)}">
+          <label class="f">Location</label><input type="text" data-k="location" value="${esc(a.location)}">
+          <label class="f">Article text</label>
+          <div><textarea data-k="paragraphs" rows="12">${esc(a.paragraphs.join('\n\n'))}</textarea>
+               <div class="hint">Leave an empty line between paragraphs.</div></div>
+          <label class="f">Key highlights</label>
+          <div><textarea data-k="highlights" rows="5">${esc(a.highlights.join('\n'))}</textarea>
+               <div class="hint">One bullet per line.</div></div>
+          <label class="f">Map link</label>
+          <div><textarea data-k="links" rows="1">${esc(a.links.join('\n'))}</textarea></div>
+          <label class="f">Photos</label>
+          <div><div class="imgs"></div><div class="hint">Click a photo to exclude or include it. Photos are numbered in page order.</div></div>
+        </div>
+      </div>`;
+    const name = $('.name', card), meta = $('.meta', card);
+    const refresh = () => {
+      name.textContent = folderName(a);
+      meta.textContent = `pages ${a.pages[0]}–${a.pages[a.pages.length - 1]} · ${a.keep.filter(Boolean).length} photos`;
+      card.classList.toggle('off', !a.include);
+      updateSummary();
+    };
+    $('.inc', card).addEventListener('click', ev => ev.stopPropagation());
+    $('.inc', card).addEventListener('change', ev => { a.include = ev.target.checked; refresh(); });
+    card.querySelectorAll('[data-k]').forEach(el => el.addEventListener('input', () => {
+      const k = el.dataset.k;
+      if (k === 'paragraphs') a.paragraphs = el.value.split(/\n\s*\n/).map(s => s.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
+      else if (k === 'highlights' || k === 'links') a[k] = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+      else a[k] = el.value;
+      refresh();
+    }));
+    // load thumbnails only when the card is first opened
+    card.addEventListener('toggle', () => {
+      const grid = $('.imgs', card);
+      if (!card.open || grid.childElementCount) return;
+      a.images.forEach((img, j) => {
+        const t = document.createElement('div');
+        t.className = 'thumb' + (a.keep[j] ? '' : ' off');
+        t.title = `${img.ext.toUpperCase()} · ${(img.size / 1024).toFixed(0)} KB`;
+        t.innerHTML = `<img loading="lazy" alt="Photo ${j + 1}" src="/api/job/${state.job}/image/${a.index}/${j}"><span class="n">${j + 1}</span>`;
+        t.addEventListener('click', () => { a.keep[j] = !a.keep[j]; t.classList.toggle('off', !a.keep[j]); refresh(); });
+        grid.appendChild(t);
+      });
+    });
+    wrap.appendChild(card);
+    refresh();
+  });
+  $('#result').hidden = false;
+}
+
+$('#expandAll').onclick = () => document.querySelectorAll('.card').forEach(c => c.open = true);
+$('#collapseAll').onclick = () => document.querySelectorAll('.card').forEach(c => c.open = false);
+
+$('#download').onclick = async () => {
+  const btn = $('#download');
+  btn.disabled = true; setStatus('Building ZIP…', 'busy');
+  try {
+    const body = {
+      zip_name: $('#zipName').value.trim(),
+      articles: state.articles.map(a => ({
+        index: a.index, include: a.include, number: a.number, title: a.title, location: a.location,
+        paragraphs: a.paragraphs, highlights: a.highlights, links: a.links,
+        images: a.keep.map((k, j) => k ? j : -1).filter(j => j >= 0),
+      })),
+    };
+    const res = await fetch(`/api/job/${state.job}/zip`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Could not build the ZIP'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = body.zip_name || 'temples.zip';
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setStatus(`Downloaded ${link.download} (${(blob.size / 1048576).toFixed(1)} MB).`);
+  } catch (e) {
+    setStatus(e.message, 'err');
+  } finally { btn.disabled = false; }
+};
+</script>
+</body>
+</html>
